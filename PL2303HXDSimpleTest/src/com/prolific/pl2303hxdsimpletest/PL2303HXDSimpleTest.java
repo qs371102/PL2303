@@ -2,9 +2,17 @@ package com.prolific.pl2303hxdsimpletest;
 
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeoutException;
+
+import javax.xml.datatype.Duration;
 
 import tw.com.prolific.driver.pl2303.PL2303Driver;
 import tw.com.prolific.driver.pl2303.PL2303Driver.DataBits;
@@ -14,6 +22,7 @@ import tw.com.prolific.driver.pl2303.PL2303Driver.StopBits;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -44,11 +53,17 @@ import android.widget.Toast;
 public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 
 	private static final  String DEVICE_ID="Bfmj";
-	
+
+	private int formerCallbackCount;
+	private List<Byte> finalCallBackData;
+
+	private long startTime;
+	private boolean sign;
+	private final long interval= (long) 20000;
 	// debug settings
 	// private static final boolean SHOW_DEBUG = false;
 	private NetworkService mService;
-	
+
 	private static final boolean SHOW_DEBUG = true;
 
 	// Defines of Display Settings
@@ -58,13 +73,14 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 	//    private static final int LINEFEED_CODE_CR = 0;
 	private static final int LINEFEED_CODE_CRLF = 1;
 	private static final int LINEFEED_CODE_LF = 2;
-	
+
 	PL2303Driver mSerial;
 
 	//    private ScrollView mSvText;
 	//   private StringBuilder mText = new StringBuilder();
 
 	String TAG = "PL2303HXD_APLog";
+	String DT="Debug";
 
 	private Button btWrite;
 	private EditText etWrite;
@@ -103,27 +119,27 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 	public String PL2303HXD_BaudRate_str="B4800";
 
 	private String strStr;
-	
-	
-	
-	
-	
+
+
+
+
+
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
-		Log.d(TAG, "Enter onCreate");
+
+		Log.d(DT, "=========Enter onCreate===========");
 
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_pl2303_hxdsimple_test);
 
 		mService=new NetworkService(this);
 		mService.delegate=this;
-		
-		//mService.sendCommand("8800000088");
+
 		Log.d(TAG, "network Service!");
-		
-		
+
+
 		//return;
-		
+
 		PL2303HXD_BaudRate_spinner = (Spinner)findViewById(R.id.spinner1);
 
 		ArrayAdapter<CharSequence> adapter = 
@@ -170,16 +186,16 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 			}
 		});        
 
-		
+
 		btGetSN = (Button) findViewById(R.id.btn_GetSN);       
 		tvShowSN = (TextView) findViewById(R.id.text_ShowSN);
 		tvShowSN.setText("");
 		btGetSN.setOnClickListener(new Button.OnClickListener() {		
 			public void onClick(View v) {				
-		
-			
+
+
 				ShowPL2303HXD_SerialNmber();
-				
+
 			}
 		});  
 		// get service
@@ -199,10 +215,17 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 		}
 
 		Log.d(TAG, "Leave onCreate");
-		
-		
-		openUsbSerial();
-		
+
+		new android.os.Handler().postDelayed(
+				new Runnable() {
+					public void run() {
+						Log.d(DT, "This'll run 500 milliseconds later");
+						openUsbSerial();
+					}
+				}, 
+				500);
+
+
 	}//onCreate
 
 	protected void onStop() {
@@ -309,22 +332,26 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 			}   		            
 			Log.d(TAG, "baudRate:"+baudRate);
 			// if (!mSerial.InitByBaudRate(mBaudrate)) {
-				if (!mSerial.InitByBaudRate(mBaudrate,700)) {
-					if(!mSerial.PL2303Device_IsHasPermission()) {
-						Toast.makeText(this, "cannot open, maybe no permission", Toast.LENGTH_SHORT).show();		
-					}
-
-					if(mSerial.PL2303Device_IsHasPermission() && (!mSerial.PL2303Device_IsSupportChip())) {
-						Toast.makeText(this, "cannot open, maybe this chip has no support, please use PL2303HXD / RA / EA chip.", Toast.LENGTH_SHORT).show();
-					}
-				} else {        	
-					
-						Toast.makeText(this, "connected : " , Toast.LENGTH_SHORT).show(); 	
-					
+			if (!mSerial.InitByBaudRate(mBaudrate,700)) {
+				if(!mSerial.PL2303Device_IsHasPermission()) {
+					Toast.makeText(this, "cannot open, maybe no permission", Toast.LENGTH_SHORT).show();		
 				}
+
+				if(mSerial.PL2303Device_IsHasPermission() && (!mSerial.PL2303Device_IsSupportChip())) {
+					Toast.makeText(this, "cannot open, maybe this chip has no support, please use PL2303HXD / RA / EA chip.", Toast.LENGTH_SHORT).show();
+				}
+			} else {        	
+
+				Toast.makeText(this, "connected : " , Toast.LENGTH_SHORT).show(); 	
+
+			}
 		}//isConnected
 
 		Log.d(TAG, "Leave openUsbSerial");
+
+
+		//----------------------------------
+
 	}//openUsbSerial
 
 
@@ -340,10 +367,14 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 		if(null==mSerial)
 			return;        
 
+		Log.d(TAG, "Not null");
 		if(!mSerial.isConnected()) 
 			return;
 
+		Log.d(TAG, "Connected");
+
 		len = mSerial.read(rbuf);
+
 		if(len<0) {
 			Log.d(TAG, "Fail to bulkTransfer(read data)");
 			return;
@@ -355,21 +386,22 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 			}                
 			//rbuf[len] = 0;
 			for (int j = 0; j < len; j++) {            	   
-				//String temp=Integer.toHexString(rbuf[j]&0x000000FF);
-				//Log.i(TAG, "str_rbuf["+j+"]="+temp);
-				//int decimal = Integer.parseInt(temp, 16);
+				String temp=Integer.toHexString(rbuf[j]&0x000000FF);
+				Log.w(TAG, "str_rbuf["+j+"]="+temp);
+				int decimal = Integer.parseInt(temp);
 				//Log.i(TAG, "dec["+j+"]="+decimal);
 				//sbHex.append((char)decimal);
 				//sbHex.append(temp);
-				sbHex.append((char) (rbuf[j]&0x000000FF));
+				sbHex.append((char) (decimal));
 			}              
-			etRead.setText(sbHex.toString());  
-			mService.sendCommand(sbHex.toString());
-			Toast.makeText(this, "len="+len, Toast.LENGTH_SHORT).show();
+			etRead.setText(sbHex.toString()); 
+			Log.w(TAG, "======="+sbHex.toString()+"========");
+			//mService.sendCommand(sbHex.toString());
+			//Toast.makeText(this, "len="+len, Toast.LENGTH_SHORT).show();
 		}
 		else {     	
 			if (SHOW_DEBUG) {
-				Log.d(TAG, "read len : 0 ");
+				Log.d(TAG, " len : 0 ");
 			}
 			etRead.setText("empty");
 			return;
@@ -395,7 +427,7 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 			return;
 
 		String strWrite = etWrite.getText().toString();
-		
+
 		/*
         //strWrite="012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
        // strWrite = changeLinefeedcode(strWrite);
@@ -417,26 +449,25 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 			Log.d(TAG, "PL2303Driver Write 2(" + strWrite.length() + ") : " + strWrite);
 		}
 		//int res = mSerial.write(strWrite.getBytes(), strWrite.length());
-		
-		byte[] datas=new byte[5];
-		datas[0]=(byte)136;
+
+		byte[] datas=new byte[3];
+		datas[0]=(byte)138;
 		datas[1]=(byte)0;
-		datas[2]=(byte)0;
-		datas[3]=(byte)0;
-		datas[4]=(byte)136;
-		
+		datas[2]=(byte)138;
+
 		int res = mSerial.write(datas, datas.length);
-		
+		//readDataFromSerial();
 		if( res<0 ) {
 			Log.d(TAG, "setup2: fail to controlTransfer: "+ res);
+			//readDataFromSerial();
 			return;
 		} 
 
 		Toast.makeText(this, "Write length: "+strWrite.length()+" bytes", Toast.LENGTH_SHORT).show(); 
 
 	}//writeDataToSerial
-	
-	
+
+
 	private void ShowPL2303HXD_SerialNmber() {
 
 
@@ -451,11 +482,11 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 
 		if(mSerial.PL2303Device_GetSerialNumber()!=NULL) {
 			tvShowSN.setText(mSerial.PL2303Device_GetSerialNumber());
-			
+
 		}
 		else{
 			tvShowSN.setText("No SN");
-			
+
 		}
 
 		Log.d(TAG, "Leave ShowPL2303HXD_SerialNmber");	
@@ -560,8 +591,14 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 			t.setToNow();
 			Random mRandom = new Random(t.toMillis(false));
 
-			byte[] byteArray1 = new byte[256]; //test pattern-1    	
-			mRandom.nextBytes(byteArray1);//fill buf with random bytes
+			//byte[] byteArray1 = new byte[256]; //test pattern-1    	
+			//mRandom.nextBytes(byteArray1);//fill buf with random bytes
+
+			byte[] byteArray1 = new byte[3]; //test pattern-1    	
+			byteArray1[0]=(byte)138;
+			byteArray1[1]=(byte)0;
+			byteArray1[2]=(byte)138;
+
 			Send_Notifier_Message(START_NOTIFIER);    	
 
 			for(int WhichBR=0;WhichBR<mBRate.length;WhichBR++) {
@@ -581,7 +618,7 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 				} 
 				Send_Notifier_Message(PROG_NOTIFIER_LARGE);
 
-				for(int times=0;times<2;times++) {
+				for(int times=0;times<1;times++) {
 
 					len = mSerial.write(byteArray1, byteArray1.length);
 					if( len<0 ) {
@@ -638,6 +675,11 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 
 		}//run()
 	};//Runnable tLoop
+
+
+
+
+
 
 	public class MyOnItemSelectedListener implements OnItemSelectedListener {
 		public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -696,9 +738,9 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 	@Override
 	public void receiveData(String data) {
 		// TODO Auto-generated method stub
-		Log.d(TAG, "Enter writeDataToSerial");
+		Log.d(TAG, "receive command");
 		String strWrite = data;
-		
+
 		if (SHOW_DEBUG) {
 			Log.d(TAG, "PL2303Driver Write 2(" + strWrite.length() + ") : " + strWrite);
 		}
@@ -709,28 +751,47 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 		if(!mSerial.isConnected()) 
 			return;
 		int res = mSerial.write(datas, datas.length);
-		
+		Log.d(DT,"res:"+res);
 		if( res<0 ) {
 			Log.d(TAG, "setup2: fail to controlTransfer: "+ res);
 			return;
 		}else
 		{
-			Toast.makeText(this, "Write length: "+strWrite.length()+" bytes", Toast.LENGTH_SHORT).show(); 
-			while(true)
+			Toast.makeText(this, "Write length: "+strWrite.length()+" bytes", Toast.LENGTH_SHORT).show();
+
+			finalCallBackData=new ArrayList<Byte>();
+			//			sign=true;
+
+			//			//=================================
+			//			//—” ±4S ÷¥––
+			//			new android.os.Handler().postDelayed(
+			//				    new Runnable() {
+			//				        public void run() {
+			//				            Log.d(DT, "This'll run 4000 milliseconds later");
+			//				            sign=false;
+			//				        }
+			//				    }, 
+			//				300);
+
+			startTime=System.currentTimeMillis();
+			while(false||(System.currentTimeMillis()-startTime)<interval)
 			{
-				try{
-				readDataFromSerial();
-				}catch(Exception e)
+				if(!ifContinueWaitToReadCallBackFromSerial())
 				{
 					break;
 				}
+				try{
+					Thread.sleep(500);
+				}catch(Exception ex)
+				{
+					Log.w(DT, "exception:"+ex.toString());
+				}
 			}
 		}
-		
 	}
-	
+
 	//TODO tmp
-	
+
 	public byte[] parseStringToData(String data)
 	{
 		final String[] datas = data.split(":");
@@ -745,33 +806,100 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 		else
 			return null;
 	}
-	
+
+	//≈–∂œ «∑Ò «±æ…Ë±∏µƒ√¸¡Ó
 	public boolean isMine(String sign)
 	{
 		return true;
-//		if(sign.equals(DEVICE_ID))
-//			return true;
-//		else
-//			return false;
+		//		if(sign.equals(DEVICE_ID))
+		//			return true;
+		//		else
+		//			return false;
 	}
-	
-    /** 
-     * bytesÂ≠óÁ¨¶‰∏≤ËΩ¨Êç¢‰∏∫ByteÂÄº 
-     * @param src String ByteÂ≠óÁ¨¶‰∏≤ÔºåÊØè‰∏™Byte‰πãÈó¥Ê≤°ÊúâÂàÜÈöîÁ¨¶(Â≠óÁ¨¶ËåÉÂõ¥:0-9 A-F) 
-     * @return byte[] 
-     */  
-    public static byte[] hexStr2Bytes(String src){  
-        /*ÂØπËæìÂÖ•ÂÄºËøõË°åËßÑËåÉÂåñÊï¥ÁêÜ*/  
-        String[] datas = src.trim().split(",");  
-        //Â§ÑÁêÜÂÄºÂàùÂßãÂåñ  
-        byte[] finalData=new byte[datas.length];
-        Log.d("PL2303HXD_APLog", "length"+datas.length);
-        for (int i=0;i<datas.length;i++) {
-        	
-        	int tmp=Integer.parseInt(datas[i]);
-        	finalData[i]=(byte)tmp;
+
+
+	public static byte[] hexStr2Bytes(String src){  
+
+		String[] datas = src.trim().split(",");  
+
+		byte[] finalData=new byte[datas.length];
+		Log.d("PL2303HXD_APLog", "ex:"+datas.length);
+		for (int i=0;i<datas.length;i++) {
+
+			int tmp=Integer.parseInt(datas[i]);
+			finalData[i]=(byte)tmp;
 		}
-        return finalData;  
-    }  
-     
+		return finalData;  
+	}  
+
+	public boolean ifContinueWaitToReadCallBackFromSerial()
+	{
+		int len;
+		byte[] rbuf = new byte[1024];
+
+		if(null==mSerial)
+			return false;        
+
+		if(!mSerial.isConnected()) 
+			return false;
+
+		Log.d(TAG, "Connected");
+
+		len = mSerial.read(rbuf);
+
+		if(len<0) {
+			Log.d(TAG, "Fail to bulkTransfer(read data)");
+			return true;
+		}
+		//∑˚∫œÃıº˛∂¡»°Ω· ¯
+		if(formerCallbackCount>0&&len==0)
+		{
+			Log.w(DT, "finalCallbackData:");
+			for (Byte b : finalCallBackData) 
+			{            	   
+				String temp=Integer.toHexString(b&0x000000FF);
+				Log.w(DT, temp+" ");
+			}
+			//mService.sendCommand(finalCallBackData.toString());
+			//Log.d(DT,"fcbd"+ finalCallBackData.toString());
+			return false;
+		}
+		else
+		{
+			formerCallbackCount=len;
+		}
+
+		if (len > 0) {        	
+			if (SHOW_DEBUG) {
+				Log.d(DT, "read len >0 : " + len);
+			}                
+
+			Log.d(DT, "=================start=================");
+			for (int j = 0; j < len; j++) {            	   
+				String temp=Integer.toHexString(rbuf[j]&0x000000FF);
+				Log.w(DT, "str_rbuf["+j+"]="+temp);
+				finalCallBackData.add(rbuf[j]);
+			}
+			//byte[] tmp=Arrays.copyOf(rbuf, len);
+			//finalCallBackData.add(tmp);
+
+			Log.d(DT, "==================end===================");
+		}
+		else {     	
+			if (SHOW_DEBUG) {
+				Log.d(DT, "read len : 0 ");
+			}
+			return true;
+		}
+
+		try {
+			Thread.sleep(50);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		Log.d(DT, "Leave readDataFromSerial");	
+		return true;
+	}
+
 }
