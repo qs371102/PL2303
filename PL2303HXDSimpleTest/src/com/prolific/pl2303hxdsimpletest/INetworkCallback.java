@@ -1,5 +1,5 @@
 package com.prolific.pl2303hxdsimpletest;
 
-public interface NetworkCallback {
+public interface INetworkCallback {
 	public void receiveData(String data);
 }

@@ -47,18 +47,18 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.bfmj.handledevices.*;
 
 
+public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 
-public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 
-	private static final  String DEVICE_ID="Bfmj";
-
+	//---------------------------------------------------
 	private int formerCallbackCount;
 	private List<Byte> finalCallBackData;
 
 	private long startTime;
-	private boolean sign;
+	//20s
 	private final long interval= (long) 20000;
 	// debug settings
 	// private static final boolean SHOW_DEBUG = false;
@@ -80,6 +80,7 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 	//   private StringBuilder mText = new StringBuilder();
 
 	String TAG = "PL2303HXD_APLog";
+
 	String DT="Debug";
 
 	private Button btWrite;
@@ -744,14 +745,20 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 		if (SHOW_DEBUG) {
 			Log.d(TAG, "PL2303Driver Write 2(" + strWrite.length() + ") : " + strWrite);
 		}
+
 		byte[] datas=parseStringToData(data);
+		if(datas==null)
+			return;
+
 		if(null==mSerial)
 			return;
 
 		if(!mSerial.isConnected()) 
 			return;
 		int res = mSerial.write(datas, datas.length);
+
 		Log.d(DT,"res:"+res);
+
 		if( res<0 ) {
 			Log.d(TAG, "setup2: fail to controlTransfer: "+ res);
 			return;
@@ -761,7 +768,6 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 
 			finalCallBackData=new ArrayList<Byte>();
 			//			sign=true;
-
 			//			//=================================
 			//			//延时4S 执行
 			//			new android.os.Handler().postDelayed(
@@ -774,6 +780,7 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 			//				300);
 
 			startTime=System.currentTimeMillis();
+
 			while(false||(System.currentTimeMillis()-startTime)<interval)
 			{
 				if(!ifContinueWaitToReadCallBackFromSerial())
@@ -795,26 +802,22 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 	public byte[] parseStringToData(String data)
 	{
 		final String[] datas = data.split(":");
-		Log.d(TAG, "isMine:"+datas[0]);
-		if(datas.length==2)
+
+		if(datas.length==3)
 		{
-			if(isMine(datas[0]))
-				Log.d(TAG, "isMine"+isMine(datas[0]));
-			byte[] finalBytes=hexStr2Bytes(datas[1]);
+
+			mService.SetTargetID(datas[0]);
+
+			if(!mService.isMine(datas[1]))
+			{
+				return null;
+			}
+
+			byte[] finalBytes=hexStr2Bytes(datas[2]);
 			return finalBytes;
 		}
 		else
 			return null;
-	}
-
-	//判断是否是本设备的命令
-	public boolean isMine(String sign)
-	{
-		return true;
-		//		if(sign.equals(DEVICE_ID))
-		//			return true;
-		//		else
-		//			return false;
 	}
 
 
@@ -855,12 +858,20 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 		if(formerCallbackCount>0&&len==0)
 		{
 			Log.w(DT, "finalCallbackData:");
-			for (Byte b : finalCallBackData) 
-			{            	   
+
+			String message="";
+			for (int i=0;i<finalCallBackData.size();i++) 
+			{   
+				Byte b=finalCallBackData.get(i);
 				String temp=Integer.toHexString(b&0x000000FF);
-				Log.w(DT, temp+" ");
+				if(i+1<finalCallBackData.size())
+					message+=temp+" ";
+				else
+					message+=temp;
+				Log.d(DT, " "+temp+" ");
 			}
-			//mService.sendCommand(finalCallBackData.toString());
+			Log.w(DT,"+++++"+message+"+++++");
+			mService.sendCommand(message);
 			//Log.d(DT,"fcbd"+ finalCallBackData.toString());
 			return false;
 		}
@@ -880,10 +891,7 @@ public class PL2303HXDSimpleTest extends Activity implements NetworkCallback{
 				Log.w(DT, "str_rbuf["+j+"]="+temp);
 				finalCallBackData.add(rbuf[j]);
 			}
-			//byte[] tmp=Arrays.copyOf(rbuf, len);
-			//finalCallBackData.add(tmp);
-
-			Log.d(DT, "==================end===================");
+			Log.d(DT, "===================end===================");
 		}
 		else {     	
 			if (SHOW_DEBUG) {

@@ -7,6 +7,7 @@ import org.alljoyn.bus.SignalEmitter;
 import org.alljoyn.bus.Status;
 import org.alljoyn.bus.annotation.BusSignalHandler;
 
+import com.bfmj.handledevices.HandleDevices;
 
 import android.app.Activity;
 
@@ -30,21 +31,26 @@ public class NetworkService implements INetworkService {
     //private static NetworkService networkService;
 
     /* Handler used to make calls to AllJoyn methods. See onCreate(). */
+	private String selfID; 
+    private String targetID;
+	
+	
     private Handler mBusHandler;
     private Activity mContainer;
     
-    public NetworkCallback delegate;
-    /*
-	public static NetworkService getInstance(Activity activity)
-	{
-		mContainer=activity;
-		if(networkService==null)
-		{
-			networkService=new NetworkService();
-		}
-		return networkService;
-	}
-	*/
+    public INetworkCallback delegate;
+    
+//    public void SetSelfID(String id)
+//    {
+//    	this.selfID=id;
+//    }
+    
+    public void SetTargetID(String id)
+    {
+    	this.targetID=id;
+    }
+    
+    
     public NetworkService(Activity activity) {
 		// TODO Auto-generated constructor stub
         /* Make all AllJoyn calls through a separate handler thread to prevent blocking the UI. */
@@ -54,13 +60,15 @@ public class NetworkService implements INetworkService {
         mBusHandler = new Handler(busThread.getLooper(),new BusHandlerCallback()); 
         mBusHandler.sendEmptyMessage(BusHandlerCallback.CONNECT);
         
+        selfID=HandleDevices.getSelfID();
+        //targetID=HandleDevices.getTargetID();
 	}
     
 	@Override
 	public void sendCommand(String command) {
 		// TODO Auto-generated method stub
 		Message msg = mBusHandler.obtainMessage(BusHandlerCallback.CHAT,
-                new PingInfo("BFMJ",command.toString()));
+                new PingInfo(selfID,targetID+":"+command.toString()));
 
 		mBusHandler.sendMessage(msg);
 	}
@@ -111,7 +119,6 @@ public class NetworkService implements INetworkService {
             default:
                 break;
             }
-
             return true;
         }
     });
@@ -283,4 +290,17 @@ public class NetworkService implements INetworkService {
         Log.e(TAG, log, ex);
     }
 
+	//判断是否是本设备的命令
+	public boolean isMine(String sign)
+	{
+		Log.d("Debug", sign+"========="+this.targetID);
+		if(sign.trim().equals(this.selfID))
+		{
+			Log.d("Debug","isMine");
+			return true;
+		}
+		else
+			return false;
+	}
+	
 }
