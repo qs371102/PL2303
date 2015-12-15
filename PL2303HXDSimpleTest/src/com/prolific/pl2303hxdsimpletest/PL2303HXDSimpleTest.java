@@ -52,11 +52,13 @@ import com.bfmj.handledevices.*;
 
 public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 
-
+	private static String stringToSplite=" ";
 	//---------------------------------------------------
 	private int formerCallbackCount;
 	private List<Byte> finalCallBackData;
 
+	private boolean needCallback;
+	
 	private long startTime;
 	//20s
 	private final long interval= (long) 20000;
@@ -402,7 +404,7 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 		}
 		else {     	
 			if (SHOW_DEBUG) {
-				Log.d(TAG, " len : 0 ");
+				Log.d(TAG, "read=============serial len : 0 ");
 			}
 			etRead.setText("empty");
 			return;
@@ -590,7 +592,7 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 				return;		
 
 			t.setToNow();
-			Random mRandom = new Random(t.toMillis(false));
+			//Random mRandom = new Random(t.toMillis(false));
 
 			//byte[] byteArray1 = new byte[256]; //test pattern-1    	
 			//mRandom.nextBytes(byteArray1);//fill buf with random bytes
@@ -739,12 +741,8 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 	@Override
 	public void receiveData(String data) {
 		// TODO Auto-generated method stub
-		Log.d(TAG, "receive command");
+		Log.d(DT, "receive command:"+data);
 		String strWrite = data;
-
-		if (SHOW_DEBUG) {
-			Log.d(TAG, "PL2303Driver Write 2(" + strWrite.length() + ") : " + strWrite);
-		}
 
 		byte[] datas=parseStringToData(data);
 		if(datas==null)
@@ -755,32 +753,28 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 
 		if(!mSerial.isConnected()) 
 			return;
+		
+		
 		int res = mSerial.write(datas, datas.length);
-
-		Log.d(DT,"res:"+res);
-
+		Log.d(DT, "mSerial.write  res:"+res);
+//		try{
+//			Thread.sleep(5000);
+//		}catch(Exception ex)
+//		{
+//			Log.w(DT, "exception:"+ex.toString());
+//		}
 		if( res<0 ) {
-			Log.d(TAG, "setup2: fail to controlTransfer: "+ res);
+			Log.d(DT, "setup2: fail to controlTransfer: "+ res);
 			return;
 		}else
 		{
-			Toast.makeText(this, "Write length: "+strWrite.length()+" bytes", Toast.LENGTH_SHORT).show();
-
+			Toast.makeText(this, "Write length: "+datas.length+" bytes", Toast.LENGTH_SHORT).show();
+			if(!needCallback)
+				return;
 			finalCallBackData=new ArrayList<Byte>();
-			//			sign=true;
-			//			//=================================
-			//			//延时4S 执行
-			//			new android.os.Handler().postDelayed(
-			//				    new Runnable() {
-			//				        public void run() {
-			//				            Log.d(DT, "This'll run 4000 milliseconds later");
-			//				            sign=false;
-			//				        }
-			//				    }, 
-			//				300);
 
 			startTime=System.currentTimeMillis();
-
+			
 			while(false||(System.currentTimeMillis()-startTime)<interval)
 			{
 				if(!ifContinueWaitToReadCallBackFromSerial())
@@ -788,7 +782,7 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 					break;
 				}
 				try{
-					Thread.sleep(500);
+					Thread.sleep(1000);
 				}catch(Exception ex)
 				{
 					Log.w(DT, "exception:"+ex.toString());
@@ -803,7 +797,7 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 	{
 		final String[] datas = data.split(":");
 
-		if(datas.length==3)
+		if(datas.length==4)
 		{
 
 			mService.SetTargetID(datas[0]);
@@ -812,18 +806,21 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 			{
 				return null;
 			}
-
 			byte[] finalBytes=hexStr2Bytes(datas[2]);
+			needCallback= Boolean.valueOf(datas[3]);
 			return finalBytes;
 		}
 		else
+		{
+			Log.d(TAG, "not mine");
 			return null;
+		}
 	}
 
 
 	public static byte[] hexStr2Bytes(String src){  
 
-		String[] datas = src.trim().split(",");  
+		String[] datas = src.trim().split(stringToSplite);  
 
 		byte[] finalData=new byte[datas.length];
 		Log.d("PL2303HXD_APLog", "ex:"+datas.length);
@@ -851,13 +848,13 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 		len = mSerial.read(rbuf);
 
 		if(len<0) {
-			Log.d(TAG, "Fail to bulkTransfer(read data)");
+			Log.d(DT, "Fail to bulkTransfer(read data)");
 			return true;
 		}
 		//符合条件读取结束
 		if(formerCallbackCount>0&&len==0)
 		{
-			Log.w(DT, "finalCallbackData:");
+			Log.w(DT, "finalCallbackData:"+formerCallbackCount);
 
 			String message="";
 			for (int i=0;i<finalCallBackData.size();i++) 
@@ -870,8 +867,13 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 					message+=temp;
 				Log.d(DT, " "+temp+" ");
 			}
-			Log.w(DT,"+++++"+message+"+++++");
-			mService.sendCommand(message);
+			//Log.w(DT,"+++++"+message+"+++++");
+			if(message.length()!=0)
+			{
+				mService.sendCommand(message);
+			}
+			else
+				return true;
 			//Log.d(DT,"fcbd"+ finalCallBackData.toString());
 			return false;
 		}
@@ -894,7 +896,7 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 			Log.d(DT, "===================end===================");
 		}
 		else {     	
-			if (SHOW_DEBUG) {
+			if (SHOW_DEBUG&&false) {
 				Log.d(DT, "read len : 0 ");
 			}
 			return true;

@@ -141,7 +141,7 @@ public class NetworkService implements INetworkService {
         @BusSignalHandler(iface = "org.alljoyn.bus.samples.slchat", signal = "Chat")
         public void Chat(String senderName, String message) {
             Log.i(TAG, "Signal  : " + senderName +": "+ message);
-            sendUiMessage(MESSAGE_CHAT, senderName + ": "+ message);
+            sendUiMessage(MESSAGE_CHAT, senderName + ":"+ message);
         }
 
         /* Helper function to send a message to the UI thread. */
@@ -293,14 +293,17 @@ public class NetworkService implements INetworkService {
 	//判断是否是本设备的命令
 	public boolean isMine(String sign)
 	{
-		Log.d("Debug", sign+"========="+this.targetID);
+		Log.d("Debug", sign+"========="+this.selfID);
 		if(sign.trim().equals(this.selfID))
 		{
-			Log.d("Debug","isMine");
+			Log.d("Debug","is Mine");
 			return true;
 		}
 		else
+		{
+			Log.d("Debug","is Not Mine");
 			return false;
+		}
 	}
 	
 }
