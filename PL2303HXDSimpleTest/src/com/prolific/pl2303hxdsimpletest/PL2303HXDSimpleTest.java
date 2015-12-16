@@ -3,39 +3,20 @@ package com.prolific.pl2303hxdsimpletest;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Random;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeoutException;
 
-import javax.xml.datatype.Duration;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import tw.com.prolific.driver.pl2303.PL2303Driver;
-import tw.com.prolific.driver.pl2303.PL2303Driver.DataBits;
-import tw.com.prolific.driver.pl2303.PL2303Driver.FlowControl;
-import tw.com.prolific.driver.pl2303.PL2303Driver.Parity;
-import tw.com.prolific.driver.pl2303.PL2303Driver.StopBits;
 import android.app.Activity;
-import android.app.ActivityManager;
-import android.app.PendingIntent;
-import android.app.Service;
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.preference.PreferenceManager;
 import android.text.format.Time;
 import android.util.Log;
-import android.view.Menu;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
@@ -47,12 +28,12 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.bfmj.handledevices.*;
 
 
 public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 
 	private static String stringToSplite=" ";
+	private ExecutorService pool = Executors.newFixedThreadPool(2); 
 	//---------------------------------------------------
 	private int formerCallbackCount;
 	private List<Byte> finalCallBackData;
@@ -392,9 +373,6 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 				String temp=Integer.toHexString(rbuf[j]&0x000000FF);
 				Log.w(TAG, "str_rbuf["+j+"]="+temp);
 				int decimal = Integer.parseInt(temp);
-				//Log.i(TAG, "dec["+j+"]="+decimal);
-				//sbHex.append((char)decimal);
-				//sbHex.append(temp);
 				sbHex.append((char) (decimal));
 			}              
 			etRead.setText(sbHex.toString()); 
@@ -771,6 +749,34 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 			Toast.makeText(this, "Write length: "+datas.length+" bytes", Toast.LENGTH_SHORT).show();
 			if(!needCallback)
 				return;
+			
+			pool.execute(tReadCallback);
+		}
+	}
+
+
+	
+//	Handler networkMessageHandler = new Handler() {
+//		public void handleMessage(Message msg) {
+//			mService.sendCommand(msg.obj.toString());
+//			super.handleMessage(msg);
+//		}//handleMessage
+//	};
+//	
+//	private void Send_Network_Message(String mmsg) {
+//		Message m= new Message();
+//		m.obj = mmsg;
+//		networkMessageHandler.sendMessage(m);
+//		Log.d(TAG, String.format("Msg index: %04x", mmsg));
+//		try {
+//			Thread.sleep(1000);
+//		} catch (InterruptedException e) {
+//			e.printStackTrace();
+//		}
+//	}
+	
+	private Runnable tReadCallback = new Runnable() {
+		public void run() {	
 			finalCallBackData=new ArrayList<Byte>();
 
 			startTime=System.currentTimeMillis();
@@ -789,8 +795,8 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 				}
 			}
 		}
-	}
-
+	};
+	
 	//TODO tmp
 
 	public byte[] parseStringToData(String data)
@@ -854,7 +860,10 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 		//符合条件读取结束
 		if(formerCallbackCount>0&&len==0)
 		{
-			Log.w(DT, "finalCallbackData:"+formerCallbackCount);
+			//置0
+			formerCallbackCount=len;
+			
+			//Log.w(DT, "finalCallbackData:"+formerCallbackCount);
 
 			String message="";
 			for (int i=0;i<finalCallBackData.size();i++) 
@@ -865,7 +874,7 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 					message+=temp+" ";
 				else
 					message+=temp;
-				Log.d(DT, " "+temp+" ");
+				//Log.d(DT, " "+temp+" ");
 			}
 			//Log.w(DT,"+++++"+message+"+++++");
 			if(message.length()!=0)
@@ -877,10 +886,9 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 			//Log.d(DT,"fcbd"+ finalCallBackData.toString());
 			return false;
 		}
-		else
-		{
-			formerCallbackCount=len;
-		}
+
+		formerCallbackCount=len;
+		
 
 		if (len > 0) {        	
 			if (SHOW_DEBUG) {
@@ -890,10 +898,10 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 			Log.d(DT, "=================start=================");
 			for (int j = 0; j < len; j++) {            	   
 				String temp=Integer.toHexString(rbuf[j]&0x000000FF);
-				Log.w(DT, "str_rbuf["+j+"]="+temp);
+				//Log.w(DT, "str_rbuf["+j+"]="+temp);
 				finalCallBackData.add(rbuf[j]);
 			}
-			Log.d(DT, "===================end===================");
+			Log.d(DT, "=================end===================");
 		}
 		else {     	
 			if (SHOW_DEBUG&&false) {
