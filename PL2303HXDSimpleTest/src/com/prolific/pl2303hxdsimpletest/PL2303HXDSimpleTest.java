@@ -32,7 +32,7 @@ import android.widget.Toast;
 
 public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 
-	private static String stringToSplite=" ";
+	private static String stringToSplite="\\s+";
 	private ExecutorService pool = Executors.newFixedThreadPool(2); 
 	//---------------------------------------------------
 	private int formerCallbackCount;
@@ -832,7 +832,8 @@ public class PL2303HXDSimpleTest extends Activity implements INetworkCallback{
 		Log.d("PL2303HXD_APLog", "ex:"+datas.length);
 		for (int i=0;i<datas.length;i++) {
 
-			int tmp=Integer.parseInt(datas[i]);
+			int tmp=Integer.parseInt(datas[i],16);
+			//Log.d("Debug", i+"==="+tmp);
 			finalData[i]=(byte)tmp;
 		}
 		return finalData;  
